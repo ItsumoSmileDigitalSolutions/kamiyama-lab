@@ -444,7 +444,45 @@ STUDIO カスタムコード（body側）貼り付け用
 </div>
 <script>
 (function() {
-  // iframe内のナビ・ボタンクリックをキャッチして親ページにスクロール要求を送る
+  // ======================================================================
+  // 精密版（指示書 章9）：iframe内の各セクションY座標を親ページに通知し
+  // ナビクリック時には「どのセクションに・値だけ飛ばせる」要求を送る。
+  // 親側（STUDIO）は iframe絶対位置 + 受信したセクションoffsetTop で正確に飛ぶ。
+  // ======================================================================
+  var HEADER_OFFSET = 100; // ヘッダー分の余白（scroll-margin-topと合わせる）
+
+  // 各セクションの iframe内offsetTop を集めて親に送る
+  function collectOffsets() {
+    var map = {};
+    var sections = document.querySelectorAll('#kamiyama-embed [id]');
+    for (var i = 0; i < sections.length; i++) {
+      var el = sections[i];
+      var id = el.getAttribute('id');
+      if (!id) continue;
+      // ページ最上部からの絶対位置（getBoundingClientRect + スクロール量）
+      var rect = el.getBoundingClientRect();
+      var top = rect.top + (window.pageYOffset || document.documentElement.scrollTop || 0);
+      map['#' + id] = Math.max(0, Math.round(top - HEADER_OFFSET));
+    }
+    return map;
+  }
+
+  function sendOffsets() {
+    if (!(window.parent && window.parent !== window)) return;
+    try {
+      window.parent.postMessage({
+        type: 'kamiyama-section-offsets',
+        offsets: collectOffsets(),
+        docHeight: Math.max(
+          document.body.scrollHeight,
+          document.documentElement.scrollHeight
+        ),
+        headerOffset: HEADER_OFFSET
+      }, '*');
+    } catch (err) { /* cross-origin: ignore */ }
+  }
+
+  // ナビ・ボタンクリック時：親にスクロール要求（hash付き）を送る
   document.addEventListener('click', function(e) {
     var a = e.target.closest('a[href^="#"]');
     if (!a) return;
@@ -456,11 +494,51 @@ STUDIO カスタムコード（body側）貼り付け用
     if (target) {
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-    // 親ページ（STUDIO側）にスクロール要求を送信
+    // 親ページ（STUDIO側）にスクロール要求を送信（最新offsetも同封）
     if (window.parent && window.parent !== window) {
       try {
-        window.parent.postMessage({ type: 'kamiyama-scroll-request', hash: hash }, '*');
+        window.parent.postMessage({
+          type: 'kamiyama-scroll-request',
+          hash: hash,
+          offset: (collectOffsets()[hash] || 0),
+          headerOffset: HEADER_OFFSET
+        }, '*');
       } catch (err) { /* cross-origin: ignore */ }
+    }
+  });
+
+  // 初回・レイアウト確定後・リサイズ時に座標を再送信
+  function scheduleSend() {
+    // 画像読み込み等で高さが変わるので少し遅延させても送る
+    sendOffsets();
+    setTimeout(sendOffsets, 300);
+    setTimeout(sendOffsets, 1200);
+  }
+  if (document.readyState === 'complete') {
+    scheduleSend();
+  } else {
+    window.addEventListener('load', scheduleSend);
+    document.addEventListener('DOMContentLoaded', sendOffsets);
+  }
+  window.addEventListener('resize', function() {
+    clearTimeout(window.__kamiyamaResizeTimer);
+    window.__kamiyamaResizeTimer = setTimeout(sendOffsets, 200);
+  });
+
+  // コンテンツ高さの変化（アコーディオン展開等）を ResizeObserver で検知し再送信
+  if (typeof ResizeObserver !== 'undefined') {
+    var ro = new ResizeObserver(function() {
+      clearTimeout(window.__kamiyamaROTimer);
+      window.__kamiyamaROTimer = setTimeout(sendOffsets, 200);
+    });
+    var root = document.getElementById('kamiyama-embed');
+    if (root) ro.observe(root);
+  }
+
+  // 親からのリクエスト（例：初期化直後に座標が欲しい）に応答
+  window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'kamiyama-request-offsets') {
+      sendOffsets();
     }
   });
 })();

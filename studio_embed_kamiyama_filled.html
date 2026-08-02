@@ -28,11 +28,23 @@ STUDIO カスタムコード（body側）貼り付け用
 #kamiyama-embed img { display: block; width: 100%; max-width: 100%; }
 #kamiyama-embed a { color: var(--green); text-decoration: none; }
 #kamiyama-embed .k-wrap { width: min(calc(100% - 32px), var(--max)); margin: 0 auto; }
+/* ヘッダーをiframe内で固定表示 */
 #kamiyama-embed .k-header {
-  position: sticky; top: 0; z-index: 20;
-  background: rgba(255,255,255,.92);
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: rgba(255,255,255,.96);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
+}
+/* コンテンツをヘッダー高さ分だけ下げる / フッター分の下余白確保 */
+#kamiyama-embed { padding-top: 88px; padding-bottom: 80px; }
+/* 各セクションへのジャンプ時、ヘッダーに隠れないように上余白確保 */
+#kamiyama-embed .k-section { scroll-margin-top: 100px; }
+/* フッターをiframe内で固定表示 */
+#kamiyama-embed .k-footer {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 90;
+  background: rgba(255,255,255,.96);
+  border-top: 1px solid var(--border);
+  padding: 12px 0;
 }
 #kamiyama-embed .k-header-inner {
   display: flex; justify-content: space-between; align-items: center; gap: 16px;
@@ -155,11 +167,14 @@ STUDIO カスタムコード（body側）貼り付け用
 #kamiyama-embed .k-row:last-child { border-bottom: none; padding-bottom: 0; }
 #kamiyama-embed .k-row dt { font-weight: 800; }
 #kamiyama-embed .k-row dd { margin: 0; color: var(--muted); }
-#kamiyama-embed .k-footer { padding: 28px 0 44px; color: var(--muted); }
+#kamiyama-embed .k-footer { color: var(--muted); }
 #kamiyama-embed .k-credits { margin-top: 10px; font-size: .92rem; }
 #kamiyama-embed .k-mobile-cta { display: none; }
 
 @media (max-width: 840px) {
+  /* タブレット/モバイルではヘッダーが縦積みで高くなるので余白を調整 */
+  #kamiyama-embed { padding-top: 140px; padding-bottom: 110px; }
+  #kamiyama-embed .k-section { scroll-margin-top: 150px; }
   #kamiyama-embed .k-grid-hero,
   #kamiyama-embed .k-grid-2,
   #kamiyama-embed .k-grid-3,
@@ -181,7 +196,6 @@ STUDIO カスタムコード（body側）貼り付け用
   #kamiyama-embed .k-chips { display: grid; grid-template-columns: 1fr; gap: 10px; }
   #kamiyama-embed .k-chip { border-radius: 16px; padding: 12px 14px; }
   #kamiyama-embed .k-row { grid-template-columns: 1fr; gap: 4px; }
-  #kamiyama-embed .k-footer { padding-bottom: 98px; }
   #kamiyama-embed .k-mobile-cta {
     display: grid; grid-template-columns: 1fr 1fr; gap: 10px; position: fixed;
     left: 12px; right: 12px; bottom: 12px; z-index: 50;
@@ -191,6 +205,8 @@ STUDIO カスタムコード（body側）貼り付け用
   #kamiyama-embed .k-mobile-cta .k-btn { width: 100%; min-height: 48px; padding: 0 12px; font-size: .96rem; }
 }
 @media (max-width: 480px) {
+  #kamiyama-embed { padding-top: 160px; }
+  #kamiyama-embed .k-section { scroll-margin-top: 170px; }
   #kamiyama-embed .k-wrap { width: min(calc(100% - 20px), var(--max)); }
   #kamiyama-embed h1 { font-size: 1.9rem; }
   #kamiyama-embed .k-lead { font-size: .98rem; }
@@ -426,4 +442,27 @@ STUDIO カスタムコード（body側）貼り付け用
     <a class="k-btn k-btn-secondary" href="#services">できること</a>
   </div>
 </div>
+<script>
+(function() {
+  // iframe内のナビ・ボタンクリックをキャッチして親ページにスクロール要求を送る
+  document.addEventListener('click', function(e) {
+    var a = e.target.closest('a[href^="#"]');
+    if (!a) return;
+    var hash = a.getAttribute('href');
+    if (!hash || hash === '#') return;
+    e.preventDefault();
+    // iframe内スクロール（フォールバック：親ページが受け取らない場合用）
+    var target = document.querySelector(hash);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    // 親ページ（STUDIO側）にスクロール要求を送信
+    if (window.parent && window.parent !== window) {
+      try {
+        window.parent.postMessage({ type: 'kamiyama-scroll-request', hash: hash }, '*');
+      } catch (err) { /* cross-origin: ignore */ }
+    }
+  });
+})();
+</script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79"}' crossorigin="anonymous"></script>
